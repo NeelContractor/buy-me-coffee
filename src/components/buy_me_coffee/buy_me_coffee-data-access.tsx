@@ -11,6 +11,12 @@ import { useTransactionToast } from '../use-transaction-toast'
 import { toast } from 'sonner'
 import { BN } from 'bn.js'
 
+const OWNER_PUB_KEY = new PublicKey("GToMxgF4JcNn8dmNiHt2JrrvLaW6S1zSPoL2W8K2Wkmi");
+
+interface InitializeArgs {
+  ownerPubkey: PublicKey,
+}
+
 interface DonateArgs {
   name: string, 
   message: string, 
@@ -41,36 +47,68 @@ export function useBuyMeCoffeeProgram() {
     queryFn: () => connection.getParsedAccountInfo(programId),
   })
 
-  // const donate = useMutation<string, Error, DonateArgs>({
-  //   mutationKey: ['donate', 'initialize', { cluster }],
-  //   mutationFn: async ({ name, message, amount, donaterPubkey }) => {
+  const initialize = useMutation<string, Error, InitializeArgs>({
+    mutationKey: ['state', 'initialize', { cluster }],
+    mutationFn: async ({ ownerPubkey }) => {
+      const [coffeeAccount] = PublicKey.findProgramAddressSync(
+        [Buffer.from("coffee_account"), ownerPubkey.toBuffer()],
+        program.programId
+      );
 
-      
+      return await program.methods
+        .initialize(ownerPubkey)
+        .accountsStrict({
+          signer: ownerPubkey,
+          coffeeAccount,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc()
+    },
+    onSuccess: async (signature) => {
+      transactionToast(signature)
+      await coffeeAccount.refetch()
+    },
+    onError: () => {
+      toast.error('Failed to initialize account')
+    },
+  })
+
+  const donate = useMutation<string, Error, DonateArgs>({
+    mutationKey: ['donate', 'initialize', { cluster }],
+    mutationFn: async ({ name, message, amount, donaterPubkey }) => {
+
+      const [coffeeAccount] = PublicKey.findProgramAddressSync(
+        [Buffer.from("coffee_account"), OWNER_PUB_KEY.toBuffer()],
+        program.programId
+      );
+      const coffeeState = await program.account.coffeeAccount.fetch(coffeeAccount);
+      const count = coffeeState.purchaseCount.toNumber();
+      console.log(count)
   
-  //     [coffeePurchase] = PublicKey.findProgramAddressSync(
-  //       [Buffer.from("coffee_purchase"), coffeeAccount.toBuffer(), new anchor.BN(0).toArrayLike(Buffer, "le", 8)],
-  //       program.programId
-  //     );
+      const [coffeePurchase] = PublicKey.findProgramAddressSync(
+        [Buffer.from("coffee_purchase"), coffeeAccount.toBuffer(), new BN(count).toArrayLike(Buffer, "le", 8)],
+        program.programId
+      );
 
-  //     return await program.methods
-  //       .buyCoffee(name, message, new BN(amount))
-  //       .accountsStrict({ 
-  //         buyer: donaterPubkey,
-  //         coffeeAccount,
-  //         coffeePurchase,
-  //         systemProgram: SystemProgram.programId,
-  //         owner
-  //       })
-  //       .rpc()
-  //     },
-  //   onSuccess: async (signature) => {
-  //     transactionToast(signature)
-  //     await coffeeAccount.refetch()
-  //   },
-  //   onError: () => {
-  //     toast.error('Failed to initialize account')
-  //   },
-  // })
+      return await program.methods
+        .buyCoffee(name, message, new BN(amount))
+        .accountsStrict({ 
+          buyer: donaterPubkey,
+          coffeeAccount,
+          coffeePurchase,
+          systemProgram: SystemProgram.programId,
+          owner: OWNER_PUB_KEY
+        })
+        .rpc()
+      },
+    onSuccess: async (signature) => {
+      transactionToast(signature)
+      await coffeeAccount.refetch()
+    },
+    onError: () => {
+      toast.error('Failed to initialize account')
+    },
+  })
 
   return {
     program,
@@ -78,6 +116,8 @@ export function useBuyMeCoffeeProgram() {
     coffeeAccount,
     coffeePurchaseAccount,
     getProgramAccount,
+    initialize,
+    donate
   }
 }
 

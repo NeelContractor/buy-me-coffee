@@ -34,44 +34,44 @@ describe('Buy Me Coffee', () => {
     );
   })
 
-  it('Initialize the Coffee account', async () => {
-    const tx = await program.methods
-      .initialize(owner.publicKey)
-      .accountsStrict({
-        signer: owner.publicKey,
-        coffeeAccount,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc()
-
-      console.log("initialize transaction signature: ", tx);
-    // const account = await program.account.coffeeAccount.fetch(coffeeAccount);
-    // expect(account.owner.toString()).toEqual(owner.publicKey.toString());
-    // expect(account.totalAmount.toNumber()).toEqual(0);
-  })
-
-  // it('buy coffee', async () => {
+  // it('Initialize the Coffee account', async () => {
   //   const tx = await program.methods
-  //     .buyCoffee(name, message, amount)
+  //     .initialize(owner.publicKey)
   //     .accountsStrict({
-  //       buyer: donater.publicKey,
-  //       coffeePurchase: coffeePurchase,
+  //       signer: owner.publicKey,
   //       coffeeAccount,
-  //       owner: owner.publicKey,
   //       systemProgram: SystemProgram.programId,
   //     })
-  //     .signers([donater])
   //     .rpc()
 
-  //     console.log("Donate/Buy transaction signature: ", tx);
-  //     const purchaseAccount = await program.account.coffeePurchase.fetch(coffeePurchase);
-  //     expect(purchaseAccount.buyer.toString()).toEqual(donater.publicKey.toString());
-  //     expect(purchaseAccount.name).toEqual(name);
-  //     expect(purchaseAccount.message).toEqual(message);
-      
-  //     const account = await program.account.coffeeAccount.fetch(coffeeAccount);
-  //     console.log(account);
+  //     console.log("initialize transaction signature: ", tx);
+  //   // const account = await program.account.coffeeAccount.fetch(coffeeAccount);
+  //   // expect(account.owner.toString()).toEqual(owner.publicKey.toString());
+  //   // expect(account.totalAmount.toNumber()).toEqual(0);
   // })
+
+  it('buy coffee', async () => {
+    const tx = await program.methods
+      .buyCoffee(name, message, amount)
+      .accountsStrict({
+        buyer: donater.publicKey,
+        coffeePurchase: coffeePurchase,
+        coffeeAccount,
+        owner: owner.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([donater])
+      .rpc()
+
+      console.log("Donate/Buy transaction signature: ", tx);
+      const purchaseAccount = await program.account.coffeePurchase.fetch(coffeePurchase);
+      expect(purchaseAccount.buyer.toString()).toEqual(donater.publicKey.toString());
+      expect(purchaseAccount.name).toEqual(name);
+      expect(purchaseAccount.message).toEqual(message);
+      
+      const account = await program.account.coffeeAccount.fetch(coffeeAccount);
+      console.log(account);
+  })
 
   // it("Withdraw funds", async () => {
   //   const withdrawAmount = new anchor.BN(0.05 * LAMPORTS_PER_SOL);
