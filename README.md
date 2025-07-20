@@ -1,3 +1,3 @@
 # Buy Me Coffee
 
-Buy Me Coffe on Solana
+Buy Me Coffee on Solana

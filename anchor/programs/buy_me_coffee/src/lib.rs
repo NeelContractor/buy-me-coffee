@@ -3,7 +3,7 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("BjNtFJTE8VWZh9vdvoSxokARoRkShGBAEHkSBX6ReD3a");
+declare_id!("5d6hiEu8ZSGe31uubKUcD3VKTNVqFYCRDNfoP8aFubnu");
 
 #[program]
 pub mod buy_me_coffee {
@@ -14,6 +14,8 @@ pub mod buy_me_coffee {
         let coffee_account = &mut ctx.accounts.coffee_account;
         coffee_account.owner = owner;
         coffee_account.total_amount = 0;
+        coffee_account.purchase_count = 0;
+        coffee_account.bump = ctx.bumps.coffee_account;
         Ok(())
     }
 
@@ -21,7 +23,7 @@ pub mod buy_me_coffee {
         let coffee_account = &mut ctx.accounts.coffee_account;
         let coffee_purchase = &mut ctx.accounts.coffee_purchase;
         require!(amount > 0, CoffeeError::InvalidAmount);
-        require!(name.len() <= 60, CoffeeError::NameTooLong);
+        require!(name.len() <= 32, CoffeeError::NameTooLong);
         require!(message.len() <= 200, CoffeeError::MessageTooLong);
 
         let cpi_program = ctx.accounts.system_program.to_account_info();
@@ -42,12 +44,30 @@ pub mod buy_me_coffee {
     }
 
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
-        let coffee_account = &ctx.accounts.coffee_account;
+        let coffee_account = &mut ctx.accounts.coffee_account;
 
+        // require!(amount > 0, CoffeeError::InvalidAmount);
         require!(ctx.accounts.owner.key() == coffee_account.owner, CoffeeError::Unauthorized);
+        // require!(coffee_account.to_account_info().lamports() >= amount, CoffeeError::InsufficientFunds);
 
+        // let seeds = &[
+        //     "coffee_account".as_bytes(), 
+        //     &coffee_account.owner.to_bytes(), 
+        //     &[coffee_account.bump]
+        // ];
+        // let signer_seeds = &[&seeds[..]];
+
+        // let cpi_program = ctx.accounts.system_program.to_account_info();
+        // let cpi_accounts = Transfer {
+        //     from: coffee_account.to_account_info(),
+        //     to: ctx.accounts.owner.to_account_info(),
+        // };
+        // let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+        // transfer(cpi_ctx, amount)?;
+
+        // coffee_account.total_amount -= amount;
+        **ctx.accounts.coffee_account.to_account_info().try_borrow_mut_lamports()? -= amount;
         **ctx.accounts.owner.to_account_info().try_borrow_mut_lamports()? += amount;
-        **ctx.accounts.owner.to_account_info().try_borrow_mut_lamports()? -= amount;
 
         Ok(())
     }
@@ -56,12 +76,14 @@ pub mod buy_me_coffee {
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub signer: Signer<'info>,
 
     #[account(
         init,
-        payer = user,
+        payer = signer,
         space = 8 + CoffeeAccount::INIT_SPACE,
+        seeds = [b"coffee_account", signer.key().as_ref()],
+        bump
     )]
     pub coffee_account: Account<'info, CoffeeAccount>,
     pub system_program: Program<'info, System>,
@@ -79,7 +101,8 @@ pub struct BuyCoffee<'info> {
         init,
         payer = buyer,
         space = 8 + CoffeePurchase::INIT_SPACE,
-        seeds = [b"coffee_purchase", buyer.key().as_ref(), &Clock::get().unwrap().unix_timestamp.to_le_bytes()],
+        // seeds = [b"coffee_purchase", buyer.key().as_ref(), &Clock::get().unwrap().unix_timestamp.to_le_bytes()],
+        seeds = [b"coffee_purchase", coffee_account.key().as_ref(), &coffee_account.purchase_count.to_le_bytes()],
         bump
     )]
     pub coffee_purchase: Account<'info, CoffeePurchase>,
@@ -92,18 +115,25 @@ pub struct BuyCoffee<'info> {
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        has_one = owner,
+        seeds = [b"coffee_account", owner.key().as_ref()],
+        bump = coffee_account.bump
+    )]
     pub coffee_account: Account<'info, CoffeeAccount>,
     #[account(mut)]
     pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct CoffeeAccount {
     pub owner: Pubkey,
-    // pub total_coffees: u64,
-    pub total_amount: u64
+    pub purchase_count: u64,
+    pub total_amount: u64,
+    pub bump: u8
 }
 
 #[account]
@@ -134,10 +164,12 @@ pub struct CoffeePurchased {
 pub enum CoffeeError {
     #[msg("Invalid amount. Amount must be greater than 0.")]
     InvalidAmount,
-    #[msg("Name is too long. Maximum 50 characters.")]
+    #[msg("Name is too long. Maximum 32 characters.")]
     NameTooLong,
     #[msg("Message is too long. Maximum 200 characters.")]
     MessageTooLong,
     #[msg("Unauthorized. Only the owner can perform this action.")]
     Unauthorized,
+    #[msg("Insufficient funds for withdrawal.")]
+    InsufficientFunds,
 }
